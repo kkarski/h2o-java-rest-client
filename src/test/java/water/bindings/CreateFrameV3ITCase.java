@@ -17,42 +17,37 @@ import water.bindings.pojos.ParseV3;
 public class CreateFrameV3ITCase {
 
   private H2ORestClient client;
-  private ImportFilesV3 files;
   private ParseSetupV3 setup;
-  private ParseV3 parse;
+  private ParseSetupV3 setup2;
 
   @BeforeClass
   public void setup() {
     client = new H2ORestClient("http://localhost:54321");
   }
 
-  @Test
-  public void importFiles() throws Exception {
+  private ImportFilesV3 load() throws Exception {
 
     File f = new File(this.getClass().getResource("/allyears2k.csv").toURI());
     Assert.assertTrue(f.exists());
     Assert.assertTrue(f.isFile());
 
-    files = client.importFiles(f.getPath());
+    ImportFilesV3 files = client.importFiles(f.getPath());
 
     Assert.assertNotNull(files);
     Assert.assertNotNull(files.destination_frames);
 
+    return files;
+
   }
 
-  @Test(dependsOnMethods = {"importFiles"})
-  public void parseFiles() throws Exception {
-
-    Assert.assertNotNull(files);
-
-    String paths = "\"" + files.destination_frames[0] + "\"";
-
-    setup = client.guessSetup(new String[] {paths});
-
+  @Test(priority = 1)
+  public void guessSetup() throws Exception {
+    ImportFilesV3 files = load();
+    setup = client.guessSetup(files.destination_frames);
     Assert.assertNotNull(setup);
   }
 
-  @Test(dependsOnMethods = {"parseFiles"})
+  @Test(priority = 2)
   public void setupParse() throws Exception {
 
     Assert.assertNotNull(setup);
@@ -75,6 +70,22 @@ public class CreateFrameV3ITCase {
     p.single_quotes = setup.single_quotes;
 
     Future<ParseV3> parse = client.parse(p);
+    Assert.assertNotNull(parse.get());
+  }
+
+
+  @Test(priority = 3)
+  public void guessSetupAsObject() throws Exception {
+    ImportFilesV3 files = load();
+    setup2 = client.guessSetup(files);
+    Assert.assertNotNull(setup2);
+  }
+
+  @Test(priority = 4)
+  public void parseWitSetup() throws Exception {
+
+    Assert.assertNotNull(setup2);
+    Future<ParseV3> parse = client.parse(setup2);
     Assert.assertNotNull(parse.get());
   }
 }
