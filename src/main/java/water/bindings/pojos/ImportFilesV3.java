@@ -4,18 +4,18 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ImportFilesV3 extends RequestSchema {
-	/** path */
-	public String path;
+  /** path */
+  public String path;
 
-	/** files */
-	public String[] files;
+  /** files */
+  public String[] files;
 
-	/** names */
-	public String[] destination_frames;
+  /** names */
+  public String[] destination_frames;
 
-	/** fails */
-	public String[] fails;
+  /** fails */
+  public String[] fails;
 
-	/** dels */
-	public String[] dels;
+  /** dels */
+  public String[] dels;
 }

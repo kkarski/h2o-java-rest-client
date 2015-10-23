@@ -8,27 +8,63 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.http.HttpHeaders;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.util.EntityUtils;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.net.MediaType;
+
 import water.bindings.pojos.JobV3;
 import water.bindings.pojos.JobsV3;
-import water.bindings.proxies.jaxrs.Jobs;
 
 public abstract class JobV3Task<V> extends TimerTask implements Future<V> {
 
   private final AtomicReference<JobV3> jobv3 = new AtomicReference<JobV3>();
   private final AtomicBoolean cancelled = new AtomicBoolean(false);
-  private final Jobs jobs;
+  private final CloseableHttpClient client;
   private final String jobId;
   private final V reply;
+  private final String url;
+  private final static ObjectMapper mapper = new ObjectMapper();
 
-  public JobV3Task(String jobId, Jobs jobs, V reply) {
-    this.jobs = jobs;
+  public JobV3Task(String jobId, CloseableHttpClient jobs, String url, V reply) {
+    this.client = jobs;
     this.jobId = jobId;
     this.reply = reply;
+    this.url = url;
   }
 
   @Override
   public void run() {
-    final JobsV3 job = jobs.jobs(jobId);
+
+    HttpResponse response = null;
+    JobsV3 job = null;
+    try {
+
+      HttpGet get = new HttpGet(new URIBuilder(url).setPath("/3/Jobs/" + jobId).build());
+      get.setHeader(HttpHeaders.CONTENT_TYPE, MediaType.JSON_UTF_8.toString());
+      get.setHeader(HttpHeaders.CACHE_CONTROL, "no-cache");
+
+      response = client.execute(get);
+
+      if (response.getStatusLine().getStatusCode() == 200) {
+        job = mapper.readValue(response.getEntity().getContent(), JobsV3.class);
+      }
+
+    } catch (Exception e) {
+
+    } finally {
+      try {
+        EntityUtils.consume(response.getEntity());
+      } catch (Exception ex) {
+
+      }
+    }
+
     jobv3.set(job.jobs[0]);
   }
 
