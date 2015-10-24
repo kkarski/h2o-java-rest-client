@@ -38,6 +38,10 @@ public abstract class JobV3Task<V> extends TimerTask implements Future<V> {
     this.url = url;
   }
 
+  protected V updateReplyStatus(V reply, JobV3 job) {
+    return reply;
+  }
+
   @Override
   public void run() {
 
@@ -88,7 +92,8 @@ public abstract class JobV3Task<V> extends TimerTask implements Future<V> {
     }
 
     cancel();
-    return reply;
+    V updated = updateReplyStatus(reply, jobv3.get());
+    return updated;
   }
 
   @Override
@@ -103,6 +108,6 @@ public abstract class JobV3Task<V> extends TimerTask implements Future<V> {
 
   @Override
   public boolean isDone() {
-    return (jobv3.get() != null && jobv3.get().status.equalsIgnoreCase("done"));
+    return (jobv3.get() != null && (jobv3.get().status.equalsIgnoreCase("done") || jobv3.get().status.equalsIgnoreCase("failed")));
   }
 }

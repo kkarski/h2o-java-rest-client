@@ -20,6 +20,7 @@ import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 
 import com.appx.h2o.tasks.ParseV3Task;
+import com.appx.h2o.tasks.SplitFrameV3Task;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.net.MediaType;
 
@@ -27,15 +28,12 @@ import water.bindings.pojos.FrameKeyV3;
 import water.bindings.pojos.ImportFilesV3;
 import water.bindings.pojos.ParseSetupV3;
 import water.bindings.pojos.ParseV3;
+import water.bindings.pojos.SplitFrameV3;
 
 public class H2ORestClient {
 
   private final String url;
   private final Timer timer = new Timer();
-
-  public final static String SOCKET_TIMEOUT = "filesystem.http.socketTimeout";
-  public final static String CONNECTION_TIMEOUT = "filesystem.http.connectionTimeout";
-  public final static String CONNECTION_MANAGER_TIMEOUT = "filesystem.http.connectionManagerTimeout";
 
   private PoolingHttpClientConnectionManager cm;
   private CloseableHttpClient client;
@@ -58,12 +56,12 @@ public class H2ORestClient {
   public ParseSetupV3 guessSetup(String[] source_frames) throws Exception {
 
     HttpPost post =
-        new HttpPost(new URIBuilder(url).setPath("/3/ParseSetup").setParameter("source_frames", toArray(source_frames)).build());
+        new HttpPost(new URIBuilder(url).setPath("/3/ParseSetup").setParameter("source_frames", toArray(true, source_frames)).build());
     post.setHeader(HttpHeaders.CONTENT_TYPE, com.google.common.net.MediaType.FORM_DATA + "; charset=UTF-8");
     post.setHeader(HttpHeaders.CACHE_CONTROL, "no-cache");
 
     List<NameValuePair> vals = new ArrayList<>();
-    vals.add(new BasicNameValuePair("source_frames", toArray(source_frames)));
+    vals.add(new BasicNameValuePair("source_frames", toArray(true, source_frames)));
     post.setEntity(new UrlEncodedFormEntity(vals));
 
     HttpResponse response = client.execute(post);
@@ -113,8 +111,8 @@ public class H2ORestClient {
     vals.add(new BasicNameValuePair("chunk_size", String.valueOf(p.chunk_size)));
     vals.add(new BasicNameValuePair("destination_frame", escapePath(p.destination_frame)));
     vals.add(new BasicNameValuePair("number_columns", String.valueOf(p.number_columns)));
-    vals.add(new BasicNameValuePair("column_names", toArray(p.column_names)));
-    vals.add(new BasicNameValuePair("column_types", toArray(p.column_types)));
+    vals.add(new BasicNameValuePair("column_names", toArray(true, p.column_names)));
+    vals.add(new BasicNameValuePair("column_types", toArray(true, p.column_types)));
     vals.add(new BasicNameValuePair("separator", String.valueOf(p.separator)));
     vals.add(new BasicNameValuePair("check_header", String.valueOf(p.check_header)));
     vals.add(new BasicNameValuePair("delete_on_done", Boolean.TRUE.toString()));
@@ -151,15 +149,15 @@ public class H2ORestClient {
     vals.add(new BasicNameValuePair("chunk_size", String.valueOf(p.chunk_size)));
     vals.add(new BasicNameValuePair("destination_frame", escapePath(p.destination_frame.name)));
     vals.add(new BasicNameValuePair("number_columns", String.valueOf(p.number_columns)));
-    vals.add(new BasicNameValuePair("column_names", toArray(p.column_names)));
-    vals.add(new BasicNameValuePair("column_types", toArray(p.column_types)));
+    vals.add(new BasicNameValuePair("column_names", toArray(true, p.column_names)));
+    vals.add(new BasicNameValuePair("column_types", toArray(true, p.column_types)));
     vals.add(new BasicNameValuePair("separator", String.valueOf(p.separator)));
     vals.add(new BasicNameValuePair("check_header", String.valueOf(p.check_header)));
     vals.add(new BasicNameValuePair("delete_on_done", String.valueOf(p.delete_on_done)));
     vals.add(new BasicNameValuePair("parse_type", p.parse_type.name()));
     vals.add(new BasicNameValuePair("single_quotes", String.valueOf(p.single_quotes)));
 
-    HttpPost post = new HttpPost(url);
+    HttpPost post = new HttpPost(url + "/3/Parse");
     post.setEntity(new UrlEncodedFormEntity(vals));
     post.setHeader(HttpHeaders.CONTENT_TYPE, MediaType.FORM_DATA + "; charset=UTF-8");
     post.setHeader(HttpHeaders.CACHE_CONTROL, "no-cache");
@@ -182,6 +180,40 @@ public class H2ORestClient {
 
   }
 
+  public Future<SplitFrameV3> splitFrame(ParseV3 parse, Double[] ratios) throws Exception {
+
+    HttpPost post = new HttpPost(new URIBuilder(url).setPath("/3/SplitFrame").build());
+    post.setHeader(HttpHeaders.CONTENT_TYPE, MediaType.FORM_DATA + "; charset=UTF-8");
+    post.setHeader(HttpHeaders.CACHE_CONTROL, "no-cache");
+
+    List<NameValuePair> vals = new ArrayList<>();
+    vals.add(new BasicNameValuePair("dataset", toArray(true, parse.destination_frame.name)));
+    vals.add(new BasicNameValuePair("ratios", toArray(ratios)));
+
+    List<String> frames = new ArrayList<>();
+    for (Double r : ratios) {
+      frames.add(parse.destination_frame.name + "-" + r.toString());
+    }
+
+    vals.add(new BasicNameValuePair("destination_frames", toArray(true, frames.toArray(new String[] {}))));
+    post.setEntity(new UrlEncodedFormEntity(vals));
+
+    HttpResponse response = client.execute(post);
+    SplitFrameV3Task task = null;
+    try {
+      if (response.getStatusLine().getStatusCode() == 200) {
+
+        SplitFrameV3 pv3 = mapper.readValue(response.getEntity().getContent(), SplitFrameV3.class);
+        task = new SplitFrameV3Task(client, url, pv3);
+        timer.schedule(task, 500, 1000);
+      }
+    } finally {
+      EntityUtils.consume(response.getEntity());
+    }
+
+    return task;
+  }
+
   private String toArray(FrameKeyV3[] keys) {
 
     List<String> frames = new ArrayList<>();
@@ -190,20 +222,36 @@ public class H2ORestClient {
       frames.add(k.name);
     }
 
-    return toArray(frames.toArray(new String[] {}));
+    return toArray(true, frames.toArray(new String[] {}));
+  }
+
+  private String toArray(Double[] values) {
+
+    List<String> frames = new ArrayList<>();
+
+    for (Double k : values) {
+      frames.add(k.toString());
+    }
+
+    return toArray(false, frames.toArray(new String[] {}));
   }
 
   private String escapePath(String path) {
     return "\"" + path + "\"";
   }
 
-  private String toArray(String... strings) {
+  private String toArray(boolean escape, String... strings) {
     StringBuffer buffer = new StringBuffer("[");
 
     int leng = strings.length;
     int i = 1;
     for (String s : strings) {
-      buffer.append(escapePath(s));
+
+      if (escape) {
+        buffer.append(escapePath(s));
+      } else {
+        buffer.append(s);
+      }
       if (i < leng) {
         buffer.append(",");
       }

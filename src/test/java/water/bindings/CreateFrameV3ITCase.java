@@ -13,12 +13,15 @@ import water.bindings.pojos.FrameKeyV3;
 import water.bindings.pojos.ImportFilesV3;
 import water.bindings.pojos.ParseSetupV3;
 import water.bindings.pojos.ParseV3;
+import water.bindings.pojos.SplitFrameV3;
 
+@Test(singleThreaded = true)
 public class CreateFrameV3ITCase {
 
   private H2ORestClient client;
   private ParseSetupV3 setup;
   private ParseSetupV3 setup2;
+  private ParseV3 parse;
 
   @BeforeClass
   public void setup() {
@@ -82,10 +85,19 @@ public class CreateFrameV3ITCase {
   }
 
   @Test(priority = 4)
-  public void parseWitSetup() throws Exception {
-
+  public void parseWithSetup() throws Exception {
     Assert.assertNotNull(setup2);
-    Future<ParseV3> parse = client.parse(setup2);
-    Assert.assertNotNull(parse.get());
+    Future<ParseV3> parsev3 = client.parse(setup2);
+    Assert.assertNotNull(parsev3.get());
+    parse = parsev3.get();
+  }
+
+  @Test(priority = 5)
+  public void testSplitFrames() throws Exception {
+
+    Assert.assertNotNull(parse);
+    Future<SplitFrameV3> frames = client.splitFrame(parse, new Double[] {.25, .75});
+    Assert.assertNotNull(frames.get());                
+
   }
 }
