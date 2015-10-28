@@ -3,6 +3,7 @@ package com.appx.h2o;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
+import java.util.UUID;
 import java.util.concurrent.Future;
 
 import org.apache.http.HttpHeaders;
@@ -10,6 +11,7 @@ import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
@@ -28,6 +30,7 @@ import water.bindings.pojos.FrameKeyV3;
 import water.bindings.pojos.ImportFilesV3;
 import water.bindings.pojos.ParseSetupV3;
 import water.bindings.pojos.ParseV3;
+import water.bindings.pojos.RapidsV99;
 import water.bindings.pojos.SplitFrameV3;
 
 public class H2ORestClient {
@@ -178,6 +181,59 @@ public class H2ORestClient {
 
     return task;
 
+  }
+
+  public RapidsV99[] splitFrameV2(ParseV3 parse, Double[] ratios) throws Exception {
+
+    HttpPost post = new HttpPost(new URIBuilder(url).setPath("/99/Rapids").build());
+    post.setHeader(HttpHeaders.CONTENT_TYPE, MediaType.FORM_DATA + "; charset=UTF-8");
+    post.setHeader(HttpHeaders.CACHE_CONTROL, "no-cache");
+
+    String uuid = UUID.randomUUID().toString();
+    String frameName = "(gput (" + uuid + " (h2o.runif \"" + parse.destination_frame.name + "\" #-1))";
+
+    List<NameValuePair> vals = new ArrayList<>();
+    vals.add(new BasicNameValuePair("ast", frameName));
+    post.setEntity(new UrlEncodedFormEntity(vals));
+
+    HttpResponse response = null;
+    try {
+      response = client.execute(post);
+    } finally {
+      EntityUtils.consume(response.getEntity());
+    }
+
+    if (response.getStatusLine().getStatusCode() == 200) {
+
+      List<RapidsV99> resps = new ArrayList<>();
+
+      for (Double r : ratios) {
+        vals = new ArrayList<>();
+        frameName = "(gput \"" + parse.destination_frame.name + "-" + r.toString() + "\" ([ %\"" + parse.destination_frame.name + "\"" + " (l %"
+            + uuid + " #" + r.toString() + ") \"null\"))";
+        vals.add(new BasicNameValuePair("ast", frameName));
+        post.setEntity(new UrlEncodedFormEntity(vals));
+        response = client.execute(post);
+
+        try {
+          if (response.getStatusLine().getStatusCode() == 200) {
+
+            RapidsV99 pv3 = mapper.readValue(response.getEntity().getContent(), RapidsV99.class);
+            resps.add(pv3);
+
+          }
+        } finally {
+          EntityUtils.consume(response.getEntity());
+        }
+      }
+
+      HttpDelete delete = new HttpDelete(new URIBuilder(url).setPath("/3/Frames/" + uuid).addParameter("frame_id", uuid).build());
+      client.execute(delete);
+      
+      return resps.toArray(new RapidsV99[] {});
+    }
+
+    return new RapidsV99[] {};
   }
 
   public Future<SplitFrameV3> splitFrame(ParseV3 parse, Double[] ratios) throws Exception {

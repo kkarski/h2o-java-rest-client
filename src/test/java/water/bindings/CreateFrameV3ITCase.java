@@ -13,7 +13,7 @@ import water.bindings.pojos.FrameKeyV3;
 import water.bindings.pojos.ImportFilesV3;
 import water.bindings.pojos.ParseSetupV3;
 import water.bindings.pojos.ParseV3;
-import water.bindings.pojos.SplitFrameV3;
+import water.bindings.pojos.RapidsV99;
 
 @Test(singleThreaded = true)
 public class CreateFrameV3ITCase {
@@ -96,8 +96,9 @@ public class CreateFrameV3ITCase {
   public void testSplitFrames() throws Exception {
 
     Assert.assertNotNull(parse);
-    Future<SplitFrameV3> frames = client.splitFrame(parse, new Double[] {.25, .75});
-    Assert.assertNotNull(frames.get());                
+    RapidsV99[] frames = client.splitFrameV2(parse, new Double[] {0.25, 0.75});
+    Assert.assertNotNull(frames);
+    Assert.assertEquals(frames.length, 2);
 
   }
 }
